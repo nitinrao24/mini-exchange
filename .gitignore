@@ -1,0 +1,10 @@
+build/
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+.vscode/
+.idea/
+*.user
+*.suo
