@@ -1,51 +1,45 @@
-#include "order_book.hpp"
+#include "matching_engine.hpp"
 #include <iostream>
 
-static void print_level(const char* label, const std::optional<LevelInfo>& lvl) {
-    if (lvl) {
-        std::cout << label
-                  << " price=" << lvl->price_ticks
-                  << " qty="   << lvl->total_qty
-                  << " orders=" << lvl->order_count << '\n';
-    } else {
-        std::cout << label << " (empty)\n";
-    }
+static void print_trade(const Trade& t) {
+    std::cout << "  TRADE  buy=" << t.buy_order_id << " sell=" << t.sell_order_id
+              << " px=" << t.price_ticks << " qty=" << t.qty << '\n';
+}
+
+static void print_bbo(const EngineResult& r) {
+    std::cout << "  BBO  bid=";
+    if (r.best_bid) std::cout << r.best_bid->price_ticks << "x" << r.best_bid->total_qty;
+    else             std::cout << "---";
+    std::cout << "  ask=";
+    if (r.best_ask) std::cout << r.best_ask->price_ticks << "x" << r.best_ask->total_qty;
+    else             std::cout << "---";
+    std::cout << '\n';
 }
 
 int main() {
-    OrderBook book;
+    MatchingEngine engine;
 
-    book.add_resting_order({1, Side::Buy,  OrderType::Limit, 10020,  5, 1});
-    book.add_resting_order({2, Side::Buy,  OrderType::Limit, 10025, 10, 2});
-    book.add_resting_order({3, Side::Buy,  OrderType::Limit, 10025,  5, 3});
-    book.add_resting_order({4, Side::Sell, OrderType::Limit, 10030,  8, 4});
-    book.add_resting_order({5, Side::Sell, OrderType::Limit, 10035,  3, 5});
+    engine.submit_limit(1, Side::Buy,  10020, 10);
+    engine.submit_limit(2, Side::Buy,  10025,  5);
+    engine.submit_limit(3, Side::Sell, 10030,  8);
+    engine.submit_limit(4, Side::Sell, 10035,  3);
 
-    std::cout << "=== Initial book ===\n";
-    print_level("Best bid:", book.best_bid());
-    print_level("Best ask:", book.best_ask());
+    std::cout << "--- Limit buy 5 @ 10030 ---\n";
+    { auto r = engine.submit_limit(5, Side::Buy, 10030, 5);
+      for (const auto& t : r.trades) print_trade(t); print_bbo(r); }
 
-    auto snap = book.snapshot(3);
-    std::cout << "\n--- Snapshot (depth 3) ---\n";
-    std::cout << "Bids:\n";
-    for (const auto& l : snap.bids)
-        std::cout << "  " << l.price_ticks << " qty=" << l.total_qty
-                  << " orders=" << l.order_count << '\n';
-    std::cout << "Asks:\n";
-    for (const auto& l : snap.asks)
-        std::cout << "  " << l.price_ticks << " qty=" << l.total_qty
-                  << " orders=" << l.order_count << '\n';
+    std::cout << "\n--- FIFO: two resting sells at 10030 ---\n";
+    engine.submit_limit(6, Side::Sell, 10030, 4);
+    engine.submit_limit(7, Side::Sell, 10030, 4);
+    { auto r = engine.submit_limit(8, Side::Buy, 10030, 4);
+      for (const auto& t : r.trades) print_trade(t); print_bbo(r); }
 
-    std::cout << "\n=== After cancelling order 2 ===\n";
-    book.cancel_order(2);
-    print_level("Best bid:", book.best_bid());
+    std::cout << "\n--- Market sell qty=12 ---\n";
+    { auto r = engine.submit_market(9, Side::Sell, 12);
+      for (const auto& t : r.trades) print_trade(t); print_bbo(r); }
 
-    std::cout << "\n=== After cancelling order 3 ===\n";
-    book.cancel_order(3);
-    print_level("Best bid (should be 10020):", book.best_bid());
-
-    bool ok = book.cancel_order(3);
-    std::cout << "\nDouble-cancel order 3: "
-              << (ok ? "WRONGLY accepted" : "correctly rejected") << '\n';
+    std::cout << "\n--- Cancel order 1 ---\n";
+    std::cout << "  cancel(1) -> " << (engine.cancel(1) ? "ok" : "not found") << '\n';
+    std::cout << "  cancel(1) -> " << (engine.cancel(1) ? "ok" : "not found (correct)") << '\n';
     return 0;
 }

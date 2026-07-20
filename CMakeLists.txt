@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(exchange_core
     src/order_book.cpp
+    src/matching_engine.cpp
 )
 target_include_directories(exchange_core PUBLIC include)
 target_compile_options(exchange_core PRIVATE
@@ -29,6 +30,10 @@ enable_testing()
 
 add_executable(exchange_tests
     tests/test_order_book.cpp
+    tests/test_matching.cpp
+    tests/test_fifo.cpp
+    tests/test_cancel.cpp
+    tests/test_market_order.cpp
 )
 target_link_libraries(exchange_tests PRIVATE exchange_core GTest::gtest_main)
 
